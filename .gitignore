@@ -1,0 +1,10 @@
+Depth-Anything-3/
+__pycache__/
+*.pyc
+*.egg-info/
+venv/
+outputs/
+*.npz
+*.pt
+*.pth
+.ipynb_checkpoints/
