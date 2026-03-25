@@ -8,3 +8,5 @@ outputs/
 *.pt
 *.pth
 .ipynb_checkpoints/
+da3/
+data/
