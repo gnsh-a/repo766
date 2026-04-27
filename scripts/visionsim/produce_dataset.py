@@ -10,20 +10,27 @@ Usage:
 """
 
 import argparse
+import importlib.util
+import json
 import logging
 import os
 import shutil
 import subprocess
 import sys
 
+import numpy as np
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 BLENDER_EXEC = "/home/ganesh/Packages/blender-4.0.1-linux-x64/blender"
+DEPTH_GT_FILE = "depth_gt_float32.npz"
+DEPTH_GT_KEY = "depth"
+INVALID_DEPTH_THRESHOLD = 1e4
 
 
 def check_dependencies(need_ffmpeg=True):
-    """Producer needs Blender + the visionsim CLI; ffmpeg if encoding mp4."""
+    """Producer needs Blender + VisionSIM + imageio; ffmpeg if encoding mp4."""
     missing = []
     if not os.path.exists(BLENDER_EXEC):
         missing.append(
@@ -35,6 +42,8 @@ def check_dependencies(need_ffmpeg=True):
             "VisionSIM CLI not found on PATH. "
             "Activate the `da3` conda env or run `pip install visionsim`."
         )
+    if importlib.util.find_spec("imageio") is None:
+        missing.append("imageio not installed. `pip install imageio` (needed to pack GT depth EXRs).")
     if need_ffmpeg and shutil.which("ffmpeg") is None:
         missing.append("ffmpeg not on PATH (needed to encode rgb.mp4). Install via apt/conda.")
     if missing:
@@ -66,7 +75,7 @@ def render_with_visionsim(blend_path, output_dir, device="cuda"):
         "--render-config.width", "640",
         "--render-config.height", "480",
         "--render-config.depths",
-        "--render-config.debug",
+        "--render-config.no-debug",
         "--render-config.max-samples", "64",
         "--render-config.device-type", device,
         "--render-config.use-denoising",
@@ -78,6 +87,55 @@ def render_with_visionsim(blend_path, output_dir, device="cuda"):
         logger.error(f"VisionSIM stderr:\n{result.stderr}")
         raise RuntimeError("VisionSIM render failed")
     logger.info("VisionSIM render complete")
+
+
+def pack_depth_gt_npz(output_dir):
+    """Pack VisionSIM EXR depth frames into one compressed float32 NPZ.
+
+    VisionSIM writes per-frame EXRs under depths/. The project dataset contract
+    stores metric ground-truth depth as one FP32 array in meters, keyed by
+    DEPTH_GT_KEY, then removes the per-frame depth directory.
+    """
+    import imageio.v2 as imageio
+
+    transforms_path = os.path.join(output_dir, "transforms.json")
+    if not os.path.exists(transforms_path):
+        raise FileNotFoundError(f"VisionSIM did not write {transforms_path}")
+    with open(transforms_path) as f:
+        transforms = json.load(f)
+
+    depths = []
+    for i, frame_info in enumerate(transforms["frames"]):
+        depth_rel = frame_info.get("depth_file_path")
+        if not depth_rel:
+            raise KeyError(f"Frame {i} is missing depth_file_path in transforms.json")
+        depth_path = os.path.join(output_dir, depth_rel)
+        if not os.path.exists(depth_path):
+            raise FileNotFoundError(f"Missing VisionSIM depth EXR: {depth_path}")
+        depth = imageio.imread(depth_path)
+        if depth.ndim == 3:
+            depth = depth[:, :, 0]
+        depths.append(depth.astype(np.float32, copy=False))
+        del frame_info["depth_file_path"]
+
+    depth_stack = np.stack(depths, axis=0)
+    depth_rel = DEPTH_GT_FILE
+    depth_path = os.path.join(output_dir, depth_rel)
+    np.savez_compressed(depth_path, **{DEPTH_GT_KEY: depth_stack})
+
+    transforms["depth_gt_file"] = depth_rel
+    transforms["depth_gt_key"] = DEPTH_GT_KEY
+    transforms["depth_units"] = "meters"
+    transforms["invalid_depth_threshold"] = INVALID_DEPTH_THRESHOLD
+    with open(transforms_path, "w") as f:
+        json.dump(transforms, f, indent=2)
+
+    size_mb = os.path.getsize(depth_path) / 1e6
+    logger.info(f"Packed GT depth to {depth_path} shape={depth_stack.shape} size={size_mb:.2f} MB")
+
+    depths_dir = os.path.join(output_dir, "depths")
+    shutil.rmtree(depths_dir)
+    logger.info(f"Removed {depths_dir} (GT depth is stored in {DEPTH_GT_FILE})")
 
 
 def encode_rgb_mp4(output_dir, fps=25, crf=18):
@@ -103,7 +161,7 @@ def copy_meta_sidecar(blend_path, output_dir):
     if not os.path.exists(meta_src):
         logger.warning(
             f"No meta sidecar at {meta_src}. The scene script should call write_meta_sidecar(); "
-            "evaluate.py will fall back to defaults but cliff metrics may be wrong."
+            "evaluate.py will skip cliff metrics without scene metadata."
         )
         return
     shutil.copyfile(meta_src, meta_dst)
@@ -133,6 +191,7 @@ def main():
     if not os.path.exists(args.blend_file):
         build_blend(args.scene_script, args.blend_file)
     render_with_visionsim(args.blend_file, args.output_dir, device=args.device)
+    pack_depth_gt_npz(args.output_dir)
     copy_meta_sidecar(args.blend_file, args.output_dir)
 
     if args.rgb_format in ("mp4", "both"):

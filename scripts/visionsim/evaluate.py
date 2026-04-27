@@ -27,15 +27,13 @@ logger = logging.getLogger(__name__)
 
 
 def check_dependencies():
-    """Consumer needs DA3 + imageio (for EXR depth); nothing Blender/VisionSIM."""
+    """Consumer needs DA3; nothing Blender/VisionSIM."""
     missing = []
     if importlib.util.find_spec("depth_anything_3") is None:
         missing.append(
             "depth_anything_3 not importable. "
             "Install via the submodule: `cd Depth-Anything-3 && pip install -e .`"
         )
-    if importlib.util.find_spec("imageio") is None:
-        missing.append("imageio not installed. `pip install imageio` (needed to read ground-truth depth EXRs).")
     if missing:
         for m in missing:
             logger.error(m)
@@ -52,7 +50,9 @@ def ensure_dataset(dataset_dir):
     subprocess fails and we exit with a message telling the user to either
     install the producer deps or drop a pre-rendered dataset at this path.
     """
-    if os.path.exists(os.path.join(dataset_dir, "transforms.json")):
+    transforms_path = os.path.join(dataset_dir, "transforms.json")
+    depth_path = os.path.join(dataset_dir, "depth_gt_float32.npz")
+    if os.path.exists(transforms_path) and os.path.exists(depth_path):
         logger.info(f"Using existing dataset at {dataset_dir}")
         return
     logger.info(f"Dataset not found at {dataset_dir}; running produce_dataset.py")
@@ -65,11 +65,11 @@ def ensure_dataset(dataset_dir):
     if subprocess.run(cmd).returncode != 0:
         logger.error(
             "Producer failed. To run inference only, drop a pre-rendered VisionSIM "
-            f"dataset at {dataset_dir} (transforms.json + frames/ + depths/ [+ scene_meta.json])."
+            f"dataset at {dataset_dir} (transforms.json + depth_gt_float32.npz + RGB [+ scene_meta.json])."
         )
         sys.exit(1)
-    if not os.path.exists(os.path.join(dataset_dir, "transforms.json")):
-        logger.error("Producer ran but transforms.json is still missing. Aborting.")
+    if not (os.path.exists(transforms_path) and os.path.exists(depth_path)):
+        logger.error("Producer ran but transforms.json or depth_gt_float32.npz is still missing. Aborting.")
         sys.exit(1)
 
 
@@ -79,6 +79,7 @@ def load_dataset(dataset_dir, rgb_source="mp4"):
     rgb_source ('mp4' or 'png') picks which RGB representation to read.
     'mp4' falls back to PNG with a warning if rgb.mp4 is absent; 'png'
     requires per-frame PNGs and errors otherwise.
+    Ground-truth depth is required as one compressed FP32 NPZ in meters.
     """
     transforms_path = os.path.join(dataset_dir, "transforms.json")
     if not os.path.exists(transforms_path):
@@ -94,8 +95,23 @@ def load_dataset(dataset_dir, rgb_source="mp4"):
         logger.warning(f"No scene_meta.json in {dataset_dir}; cliff metrics will be skipped.")
         scene_meta = None
 
-    import imageio
     frame_infos = transforms["frames"]
+    depth_gt_file = transforms["depth_gt_file"]
+    depth_gt_key = transforms["depth_gt_key"]
+    depth_path = os.path.join(dataset_dir, depth_gt_file)
+    if not os.path.exists(depth_path):
+        raise FileNotFoundError(f"Missing required GT depth NPZ: {depth_path}")
+    with np.load(depth_path) as depth_npz:
+        if depth_gt_key not in depth_npz:
+            raise KeyError(f"{depth_path} has no `{depth_gt_key}` array")
+        depth_gt = depth_npz[depth_gt_key].astype(np.float32, copy=False)
+    if depth_gt.ndim != 3:
+        raise ValueError(f"GT depth must have shape (N, H, W), got {depth_gt.shape}")
+    if len(depth_gt) != len(frame_infos):
+        raise ValueError(
+            f"GT depth frame count ({len(depth_gt)}) does not match transforms ({len(frame_infos)})"
+        )
+
     rgb_iter = _rgb_frame_iter(dataset_dir, frame_infos, rgb_source)
 
     frames_rgb, frames_depth, frame_names = [], [], []
@@ -105,20 +121,10 @@ def load_dataset(dataset_dir, rgb_source="mp4"):
             logger.warning(f"RGB stream ran out at frame {i} (transforms expected {len(frame_infos)})")
             break
         frames_rgb.append(rgb)
-
-        depth_path = os.path.join(dataset_dir, frame_info["depth_file_path"])
-        if os.path.exists(depth_path):
-            depth = imageio.imread(depth_path)
-            if depth.ndim == 3:
-                depth = depth[:, :, 0]
-            frames_depth.append(depth)
-        else:
-            logger.warning(f"No depth file: {depth_path}")
-            frames_depth.append(None)
-
+        frames_depth.append(depth_gt[i])
         frame_names.append(os.path.basename(frame_info["file_path"]))
 
-    logger.info(f"Loaded {len(frames_rgb)} frames from {dataset_dir}")
+    logger.info(f"Loaded {len(frames_rgb)} frames and GT depth from {depth_path}")
     return frames_rgb, frames_depth, frame_names, scene_meta
 
 
