@@ -10,3 +10,5 @@ outputs/
 .ipynb_checkpoints/
 da3/
 data/
+.venv/
+.venv311/
