@@ -1,14 +1,10 @@
-"""Create a simple Blender scene for VisionSIM + DA3 integration testing.
-
-Generates a .blend file with a floor, walls, and several primitive objects
-(spheres, cubes, cylinders, cones) placed at varying depths from a fixed
-camera. The scene includes a 2-keyframe camera animation so VisionSIM's
-render pipeline succeeds.
+"""Build a simple primitives Blender scene for VisionSIM render sanity-checks.
 
 Author: Ganesh Arivoli <arivoli@wisc.edu>
 
 Usage:
-    blender --background --python scripts/visionsim/create_simple_scene.py -- data/simple_scene.blend
+    blender --background --python scripts/visionsim/create_simple_scene.py -- \\
+        data/sim_scenes/simple_scene/scene.blend
 """
 
 import math
@@ -160,9 +156,11 @@ def main():
         idx = argv.index("--")
         output_path = argv[idx + 1]
     except (ValueError, IndexError):
-        output_path = "data/simple_scene.blend"
+        output_path = "data/sim_scenes/simple_scene/scene.blend"
 
     create_scene()
+    import os
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=output_path)
     print(f"Scene saved to {output_path}")
 
