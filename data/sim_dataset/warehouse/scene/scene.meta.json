@@ -1,0 +1,217 @@
+{
+  "scene_name": "warehouse",
+  "fps": 25,
+  "units": "meters",
+  "cliff_axis": "y",
+  "cliff_position": 1.5,
+  "cliff_drop": 0.75,
+  "trajectory": "head_on_approach",
+  "trajectory_params": {
+    "distance_to_edge": 1.35,
+    "speed_mps": 0.2,
+    "x_offset": 1.4,
+    "start_y": 0.15
+  },
+  "layout": {
+    "table": {
+      "x": [
+        -1.5,
+        1.5
+      ],
+      "y": [
+        0.0,
+        1.5
+      ],
+      "z": 0.0
+    },
+    "room": {
+      "x": [
+        -3.0,
+        3.0
+      ],
+      "y": [
+        0.0,
+        8.5
+      ],
+      "z": [
+        -0.75,
+        2.5
+      ]
+    },
+    "cliffs": [
+      {
+        "name": "front",
+        "axis": "y",
+        "value": 1.5,
+        "range": [
+          -1.5,
+          1.5
+        ]
+      },
+      {
+        "name": "right",
+        "axis": "x",
+        "value": 1.5,
+        "range": [
+          0.0,
+          1.5
+        ]
+      }
+    ],
+    "distractors": [
+      {
+        "name": "WarehouseCrate",
+        "x": 2.85,
+        "y": 6.35,
+        "z": -0.6,
+        "color": [
+          0.55,
+          0.4,
+          0.2
+        ]
+      },
+      {
+        "name": "Pallet_0",
+        "x": -1.5,
+        "y": 5.5,
+        "z": -0.6,
+        "color": [
+          0.55,
+          0.4,
+          0.22
+        ]
+      },
+      {
+        "name": "Pallet_1",
+        "x": 1.5,
+        "y": 4.3,
+        "z": -0.45,
+        "color": [
+          0.55,
+          0.4,
+          0.22
+        ]
+      }
+    ],
+    "shelves": [
+      {
+        "name": "ShelfLeft",
+        "x": [
+          -3.0,
+          -2.5
+        ],
+        "y": [
+          3.5,
+          8.45
+        ]
+      },
+      {
+        "name": "ShelfRight",
+        "x": [
+          2.5,
+          3.0
+        ],
+        "y": [
+          3.5,
+          8.45
+        ]
+      }
+    ],
+    "lights": [
+      {
+        "name": "HighBay_0",
+        "type": "AREA",
+        "x": [
+          -1.675,
+          -1.325
+        ],
+        "y": [
+          0.75,
+          2.25
+        ],
+        "z": 2.5,
+        "energy_w": 70.0
+      },
+      {
+        "name": "HighBay_1",
+        "type": "AREA",
+        "x": [
+          1.325,
+          1.675
+        ],
+        "y": [
+          0.75,
+          2.25
+        ],
+        "z": 2.5,
+        "energy_w": 70.0
+      },
+      {
+        "name": "HighBay_2",
+        "type": "AREA",
+        "x": [
+          -1.675,
+          -1.325
+        ],
+        "y": [
+          3.75,
+          5.25
+        ],
+        "z": 2.5,
+        "energy_w": 70.0
+      },
+      {
+        "name": "HighBay_3",
+        "type": "AREA",
+        "x": [
+          1.325,
+          1.675
+        ],
+        "y": [
+          3.75,
+          5.25
+        ],
+        "z": 2.5,
+        "energy_w": 70.0
+      },
+      {
+        "name": "HighBay_4",
+        "type": "AREA",
+        "x": [
+          -1.675,
+          -1.325
+        ],
+        "y": [
+          6.75,
+          8.25
+        ],
+        "z": 2.5,
+        "energy_w": 70.0
+      },
+      {
+        "name": "HighBay_5",
+        "type": "AREA",
+        "x": [
+          1.325,
+          1.675
+        ],
+        "y": [
+          6.75,
+          8.25
+        ],
+        "z": 2.5,
+        "energy_w": 70.0
+      }
+    ],
+    "camera_path": {
+      "start": [
+        1.4,
+        0.15
+      ],
+      "end": [
+        1.4,
+        1.4
+      ]
+    }
+  }
+}

@@ -15,7 +15,12 @@ import sys
 # Make scripts/visionsim/ importable so we can pull in trajectories.py
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import bpy
+# bpy is only available inside Blender. Optional so --topdown-only can run
+# in the regular conda env (no scene rebuild, just regenerate the diagram).
+try:
+    import bpy
+except ImportError:
+    bpy = None
 
 from trajectories import head_on_approach
 
@@ -25,23 +30,23 @@ TABLE_Z = 0.0
 FLOOR_Z = -0.75
 CLIFF_Y = 1.5
 ROOM_HALF_W = 3.0
-ROOM_Y_BACK = -0.5  # Table back edge; gives a 3.0 (x) x 2.0 (y) m table.
-ROOM_Y_FRONT = 6.0
+ROOM_Y_BACK = 0.0   # Back wall sits on world Y origin; 2.0 m table along Y.
+ROOM_Y_FRONT = 8.5
 CEILING_Z = 2.0
 TABLE_HALF_W = 1.5
 
 # (shape, name, x, y, z, sx, sy, sz, r, g, b) — referenced by add_distractors() and the meta sidecar
 DISTRACTORS = [
     ("cylinder", "BlueCyl",        0.45, 0.90,  0.10, 0.08, 0.08, 0.20, 0.20, 0.30, 0.85),
-    ("cube",     "WarehouseCrate", 2.85, 5.85, -0.60, 0.30, 0.30, 0.30, 0.55, 0.40, 0.20),
+    ("cube",     "WarehouseCrate", 2.85, 6.35, -0.60, 0.30, 0.30, 0.30, 0.55, 0.40, 0.20),
 ]
 
 CAMERA_X_OFFSET = 1.40
-CAMERA_START_Y = -0.35    # 0.15 m inside the back edge of the new 2 m-deep table
-CAMERA_DISTANCE = 1.75    # travel along Y (the 2 m dimension), end at (1.40, +1.40)
+CAMERA_START_Y = 0.15     # 0.15 m inside the back edge of the 1.5 m-deep table
+CAMERA_DISTANCE = 1.25    # travel along Y, end at (1.40, +1.40), 0.10 m before cliff
 CAMERA_HEIGHT = 0.15
 CAMERA_PITCH_DEG = -25.0  # steeper down: keeps the table in frame to ~5 cm from the edge
-CAMERA_SPEED_MPS = 0.3
+CAMERA_SPEED_MPS = 0.2
 SCENE_FPS = 25
 
 
@@ -147,12 +152,13 @@ def add_distractors():
 
 
 def add_lighting():
+    """Single upward-facing area light bouncing off the matte ceiling."""
     bpy.ops.object.light_add(type="AREA", location=(0.0, 1.0, CEILING_Z - 0.05))
-    main = bpy.context.active_object
-    main.name = "CeilingLight"
-    main.data.energy = 250.0
-    main.data.size = 3.0
-    main.rotation_euler = (math.radians(180), 0, 0)
+    light = bpy.context.active_object
+    light.name = "CeilingLight"
+    light.data.energy = 250.0
+    light.data.size = 3.0
+    light.rotation_euler = (math.radians(180), 0.0, 0.0)
 
 
 def setup_camera():
@@ -284,15 +290,30 @@ def render_topdown(blend_path):
 
 
 def main():
+    # Args after `--` (Blender convention) or after the script path (plain python).
     argv = sys.argv
-    try:
-        idx = argv.index("--")
-        output_path = argv[idx + 1]
-    except (ValueError, IndexError):
-        output_path = "data/sim_dataset/tabletop_cliff/scene/scene.blend"
+    post = argv[argv.index("--") + 1:] if "--" in argv else argv[1:]
 
-    build_scene()
+    output_path = "data/sim_dataset/tabletop_cliff/scene/scene.blend"
+    topdown_only = False
+    for a in post:
+        if a == "--topdown-only":
+            topdown_only = True
+        else:
+            output_path = a
+
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+
+    if topdown_only:
+        # Skip Blender entirely: write meta from current constants, regen diagram.
+        write_meta_sidecar(output_path)
+        render_topdown(output_path)
+        return
+
+    if bpy is None:
+        sys.exit("This script needs Blender (bpy) for a full build. Run via "
+                 "`blender --background --python ...` or pass --topdown-only.")
+    build_scene()
     bpy.ops.wm.save_as_mainfile(filepath=output_path)
     print(f"Scene saved to {output_path}")
     write_meta_sidecar(output_path)

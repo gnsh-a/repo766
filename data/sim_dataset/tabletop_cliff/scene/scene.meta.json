@@ -7,10 +7,10 @@
   "cliff_drop": 0.75,
   "trajectory": "head_on_approach",
   "trajectory_params": {
-    "distance_to_edge": 1.85,
-    "speed_mps": 0.3,
+    "distance_to_edge": 1.35,
+    "speed_mps": 0.2,
     "x_offset": 1.4,
-    "start_y": -0.35
+    "start_y": 0.15
   },
   "layout": {
     "table": {
@@ -19,7 +19,7 @@
         1.5
       ],
       "y": [
-        -0.5,
+        0.0,
         1.5
       ],
       "z": 0.0
@@ -30,8 +30,8 @@
         3.0
       ],
       "y": [
-        -0.5,
-        6.0
+        0.0,
+        8.5
       ],
       "z": [
         -0.75,
@@ -53,7 +53,7 @@
         "axis": "x",
         "value": 1.5,
         "range": [
-          -0.5,
+          0.0,
           1.5
         ]
       }
@@ -73,7 +73,7 @@
       {
         "name": "WarehouseCrate",
         "x": 2.85,
-        "y": 5.85,
+        "y": 6.35,
         "z": -0.6,
         "color": [
           0.55,
@@ -85,7 +85,7 @@
     "camera_path": {
       "start": [
         1.4,
-        -0.35
+        0.15
       ],
       "end": [
         1.4,
