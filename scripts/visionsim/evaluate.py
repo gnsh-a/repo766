@@ -163,7 +163,15 @@ def _rgb_frame_iter(dataset_dir, frame_infos, rgb_source):
 # ---------------------------------------------------------------------------
 # DA3 inference
 # ---------------------------------------------------------------------------
-def run_da3(frames_rgb, model_name, process_res, batch_size):
+def run_da3(frames_rgb, model_name, process_res, batch_size, window_stride):
+    """Run DA3 with optional sliding-window inference + per-frame ensemble.
+
+    When ``window_stride < batch_size`` each frame appears in multiple
+    overlapping windows, each with a different reference view. Predictions
+    are scale-normalized (divided by their own median) and combined via
+    per-pixel median so that a single bad window can't dominate. The final
+    per-frame scale+shift alignment to GT happens downstream.
+    """
     from depth_anything_3.api import DepthAnything3
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logger.info(f"Loading DA3 model: {model_name} on {device}")
@@ -172,15 +180,60 @@ def run_da3(frames_rgb, model_name, process_res, batch_size):
     logger.info(f"Model loaded in {time.time() - t0:.1f}s")
 
     n = len(frames_rgb)
-    logger.info(f"Running DA3 on {n} frames (batch_size={batch_size}, process_res={process_res})")
+    if window_stride <= 0 or window_stride > batch_size:
+        window_stride = batch_size
+
+    # Build window list. Each window is [s, e). Final window is anchored to
+    # the end so frame n-1 always gets covered, even if stride doesn't divide n.
+    starts = list(range(0, n, window_stride))
+    if starts[-1] + batch_size < n:
+        starts.append(n - batch_size)
+    elif starts[-1] != max(0, n - batch_size):
+        starts.append(max(0, n - batch_size))
+    windows = []
+    seen = set()
+    for s in starts:
+        s = max(0, min(s, n - 1))
+        e = min(s + batch_size, n)
+        if (s, e) not in seen:
+            seen.add((s, e))
+            windows.append((s, e))
+
+    logger.info(
+        f"Running DA3 on {n} frames "
+        f"(batch={batch_size}, stride={window_stride}, windows={len(windows)}, "
+        f"process_res={process_res})"
+    )
     t0 = time.time()
-    all_depths = []
-    for i in range(0, n, batch_size):
-        batch = frames_rgb[i : i + batch_size]
+
+    per_frame_preds = [[] for _ in range(n)]  # list of normalized 2D arrays
+    out_h, out_w = None, None
+    for w_idx, (s, e) in enumerate(windows):
+        batch = frames_rgb[s:e]
         pred = model.inference(batch, process_res=process_res)
-        all_depths.append(pred.depth)
+        d = pred.depth  # (B, H, W)
+        if out_h is None:
+            out_h, out_w = d.shape[1], d.shape[2]
+        for j in range(d.shape[0]):
+            frame = d[j]
+            pos = frame[frame > 1e-6]
+            scale = float(np.median(pos)) if pos.size > 0 else 1.0
+            scale = max(scale, 1e-6)
+            per_frame_preds[s + j].append(frame / scale)
         torch.cuda.empty_cache()
-    depth_pred = np.concatenate(all_depths, axis=0)
+
+    depth_pred = np.zeros((n, out_h, out_w), dtype=np.float32)
+    n_per_frame = np.zeros(n, dtype=np.int32)
+    for i in range(n):
+        if not per_frame_preds[i]:
+            raise RuntimeError(f"Frame {i} got no DA3 prediction (window coverage bug)")
+        stack = np.stack(per_frame_preds[i], axis=0)
+        depth_pred[i] = np.median(stack, axis=0)
+        n_per_frame[i] = stack.shape[0]
+    logger.info(
+        f"Per-frame coverage: min={int(n_per_frame.min())} median={int(np.median(n_per_frame))} "
+        f"max={int(n_per_frame.max())}"
+    )
     elapsed = time.time() - t0
     logger.info(f"DA3 inference done in {elapsed:.2f}s ({elapsed / n:.2f}s/frame)")
     return depth_pred
@@ -190,12 +243,23 @@ def run_da3(frames_rgb, model_name, process_res, batch_size):
 # Depth alignment + standard metrics
 # ---------------------------------------------------------------------------
 def align_depth(pred, gt, valid_mask):
-    """Least-squares scale + shift: min ||a * pred + b - gt||^2 over valid pixels."""
+    """Scale + shift fit: min sum_i ((a*pred_i + b - gt_i) / gt_i)^2.
+
+    Empirically DA3-LARGE outputs direct-depth-like values (corr ~0.997 with
+    GT depth on flat scenes). Plain lstsq `a*pred + b ≈ gt` lets far-cluster
+    pixels dominate the fit because their absolute residuals are large; near
+    geometry then pays the price as a relative error. This weighted fit
+    minimizes the AbsRel objective directly: each pixel contributes its
+    relative residual, equalizing near and far. Equivalent to scaling rows
+    of the design matrix by 1/gt before lstsq.
+    """
     p = pred[valid_mask].flatten()
-    g = gt[valid_mask].flatten()
-    A = np.stack([p, np.ones_like(p)], axis=1)
-    (a, b), *_ = np.linalg.lstsq(A, g, rcond=None)
-    return a * pred + b, a, b
+    g = np.clip(gt[valid_mask].flatten(), 1e-6, None)
+    w = 1.0 / g
+    A = np.stack([p * w, w], axis=1)
+    rhs = g * w  # = ones; written this way for clarity
+    (a, b), *_ = np.linalg.lstsq(A, rhs, rcond=None)
+    return a * pred + b, float(a), float(b)
 
 
 def compute_depth_metrics(pred, gt, valid_mask):
@@ -347,6 +411,10 @@ def main():
     parser.add_argument("--model", default="depth-anything/DA3-BASE")
     parser.add_argument("--process-res", type=int, default=504)
     parser.add_argument("--batch-size", type=int, default=10)
+    parser.add_argument("--window-stride", type=int, default=0,
+                        help="Sliding-window stride for DA3 inference. 0 (default) or "
+                             "stride==batch-size disables overlap. Smaller stride averages "
+                             "predictions across multiple reference views per frame.")
     parser.add_argument("--save-every", type=int, default=10,
                         help="Save 4-panel comparison plot every Nth frame to keep IO small")
     parser.add_argument("--rgb-source", default="mp4", choices=["mp4", "png"],
@@ -363,7 +431,8 @@ def main():
         logger.error("No frames loaded. Exiting.")
         return
 
-    depth_pred = run_da3(frames_rgb, args.model, args.process_res, args.batch_size)
+    depth_pred = run_da3(frames_rgb, args.model, args.process_res, args.batch_size,
+                         args.window_stride)
     npz_path = os.path.join(args.output_dir, "da3_depth_pred.npz")
     np.savez_compressed(npz_path, depth=depth_pred)
     logger.info(f"Saved raw DA3 depth to {npz_path}  shape={depth_pred.shape}")
