@@ -9,6 +9,8 @@ outputs/
 *.pth
 .ipynb_checkpoints/
 da3/
-data/
 .venv/
 .venv311/
+
+# data/ is tracked via Git LFS (see .gitattributes); override the per-extension globs above.
+!data/**

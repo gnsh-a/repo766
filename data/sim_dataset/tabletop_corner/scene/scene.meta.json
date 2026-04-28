@@ -1,0 +1,96 @@
+{
+  "scene_name": "tabletop_corner",
+  "fps": 25,
+  "units": "meters",
+  "cliff_axis": "y",
+  "cliff_position": 1.5,
+  "cliff_drop": 0.75,
+  "trajectory": "head_on_approach",
+  "trajectory_params": {
+    "distance_to_edge": 1.85,
+    "speed_mps": 0.3,
+    "x_offset": -0.1,
+    "start_y": -0.35
+  },
+  "layout": {
+    "table": {
+      "x": [
+        -3.0,
+        0.0
+      ],
+      "y": [
+        -0.5,
+        1.5
+      ],
+      "z": 0.0
+    },
+    "room": {
+      "x": [
+        -3.0,
+        3.0
+      ],
+      "y": [
+        -0.5,
+        6.0
+      ],
+      "z": [
+        -0.75,
+        2.0
+      ]
+    },
+    "cliffs": [
+      {
+        "name": "front",
+        "axis": "y",
+        "value": 1.5,
+        "range": [
+          -3.0,
+          0.0
+        ]
+      },
+      {
+        "name": "right",
+        "axis": "x",
+        "value": 0.0,
+        "range": [
+          -0.5,
+          1.5
+        ]
+      }
+    ],
+    "distractors": [
+      {
+        "name": "BlueCyl",
+        "x": -1.05,
+        "y": 0.9,
+        "z": 0.1,
+        "color": [
+          0.2,
+          0.3,
+          0.85
+        ]
+      },
+      {
+        "name": "WarehouseCrate",
+        "x": 2.85,
+        "y": 5.85,
+        "z": -0.6,
+        "color": [
+          0.55,
+          0.4,
+          0.2
+        ]
+      }
+    ],
+    "camera_path": {
+      "start": [
+        -0.1,
+        -0.35
+      ],
+      "end": [
+        -0.1,
+        1.4
+      ]
+    }
+  }
+}
