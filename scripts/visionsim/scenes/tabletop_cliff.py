@@ -4,7 +4,7 @@ Author: Ganesh Arivoli <arivoli@wisc.edu>
 
 Usage:
     blender --background --python scripts/visionsim/scenes/tabletop_cliff.py -- \\
-        data/sim_scenes/tabletop_cliff/scene.blend
+        data/sim_dataset/tabletop_cliff/scene/scene.blend
 """
 
 import json
@@ -33,7 +33,7 @@ TABLE_HALF_W = 1.5
 # (shape, name, x, y, z, sx, sy, sz, r, g, b) — referenced by add_distractors() and the meta sidecar
 DISTRACTORS = [
     ("cylinder", "BlueCyl",        0.45, 0.90,  0.10, 0.08, 0.08, 0.20, 0.20, 0.30, 0.85),
-    ("cube",     "WarehouseCrate", 2.55, 1.95, -0.45, 0.30, 0.30, 0.30, 0.55, 0.40, 0.20),
+    ("cube",     "WarehouseCrate", 2.85, 5.85, -0.60, 0.30, 0.30, 0.30, 0.55, 0.40, 0.20),
 ]
 
 CAMERA_X_OFFSET = 1.40
@@ -218,10 +218,11 @@ def build_scene():
 def write_meta_sidecar(blend_path):
     """Dump scene constants the consumer needs but VisionSIM's transforms.json doesn't carry.
 
-    Written next to the .blend with the same stem
-    (e.g. data/sim_scenes/<scene>/scene.blend -> data/sim_scenes/<scene>/scene.meta.json).
-    produce_dataset.py copies this into the rendered output dir as scene_meta.json.
-    The `layout` block is consumed by scene_topdown.py to render the diagram.
+    Written next to the .blend with the same stem (e.g.
+    data/sim_dataset/<scene>/scene/scene.blend -> .../scene/scene.meta.json).
+    Lives inside the dataset dir so evaluate.py reads it directly via
+    <dataset>/scene/scene.meta.json. The `layout` block is consumed by
+    scene_topdown.py to render the diagram.
     """
     meta_path = os.path.splitext(blend_path)[0] + ".meta.json"
     cam_y_end = CAMERA_START_Y + CAMERA_DISTANCE
@@ -288,7 +289,7 @@ def main():
         idx = argv.index("--")
         output_path = argv[idx + 1]
     except (ValueError, IndexError):
-        output_path = "data/sim_scenes/tabletop_cliff/scene.blend"
+        output_path = "data/sim_dataset/tabletop_cliff/scene/scene.blend"
 
     build_scene()
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)

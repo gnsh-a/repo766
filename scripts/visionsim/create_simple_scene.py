@@ -4,7 +4,7 @@ Author: Ganesh Arivoli <arivoli@wisc.edu>
 
 Usage:
     blender --background --python scripts/visionsim/create_simple_scene.py -- \\
-        data/sim_scenes/simple_scene/scene.blend
+        data/sim_dataset/simple_scene/scene/scene.blend
 """
 
 import math
@@ -156,7 +156,7 @@ def main():
         idx = argv.index("--")
         output_path = argv[idx + 1]
     except (ValueError, IndexError):
-        output_path = "data/sim_scenes/simple_scene/scene.blend"
+        output_path = "data/sim_dataset/simple_scene/scene/scene.blend"
 
     create_scene()
     import os

@@ -65,7 +65,7 @@ def ensure_dataset(dataset_dir):
     if subprocess.run(cmd).returncode != 0:
         logger.error(
             "Producer failed. To run inference only, drop a pre-rendered VisionSIM "
-            f"dataset at {dataset_dir} (transforms.json + depth_gt_float32.npz + RGB [+ scene_meta.json])."
+            f"dataset at {dataset_dir} (transforms.json + depth_gt_float32.npz + RGB [+ scene/scene.meta.json])."
         )
         sys.exit(1)
     if not (os.path.exists(transforms_path) and os.path.exists(depth_path)):
@@ -87,12 +87,12 @@ def load_dataset(dataset_dir, rgb_source="mp4"):
     with open(transforms_path) as f:
         transforms = json.load(f)
 
-    meta_path = os.path.join(dataset_dir, "scene_meta.json")
+    meta_path = os.path.join(dataset_dir, "scene", "scene.meta.json")
     if os.path.exists(meta_path):
         with open(meta_path) as f:
             scene_meta = json.load(f)
     else:
-        logger.warning(f"No scene_meta.json in {dataset_dir}; cliff metrics will be skipped.")
+        logger.warning(f"No scene/scene.meta.json in {dataset_dir}; cliff metrics will be skipped.")
         scene_meta = None
 
     frame_infos = transforms["frames"]

@@ -3,7 +3,7 @@
 Author: Ganesh Arivoli <arivoli@wisc.edu>
 
 Usage:
-    python scripts/visionsim/scene_topdown.py data/sim_scenes/tabletop_cliff/
+    python scripts/visionsim/scene_topdown.py data/sim_dataset/tabletop_cliff/scene/
 """
 
 import json
@@ -74,7 +74,7 @@ def render(scene_dir):
     ax.set_xlabel("X (m)")
     ax.set_ylabel("Y (m, +Y = forward)")
     ax.set_title(f"Top-down: {meta.get('scene_name', scene_dir)}")
-    ax.legend(loc="upper right", fontsize=9)
+    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0, fontsize=9)
     ax.grid(alpha=0.3)
     fig.tight_layout()
 

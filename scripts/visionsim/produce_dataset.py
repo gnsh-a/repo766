@@ -1,11 +1,15 @@
 """Build a Blender scene and render it with VisionSIM into a dataset directory.
 
+Layout: scene authoring artifacts (.blend + meta + topdown) live under
+<output-dir>/scene/, sitting next to the rendered transforms.json + rgb.mp4
++ depth_gt_float32.npz so a single dir is self-contained.
+
 Author: Ganesh Arivoli <arivoli@wisc.edu>
 
 Usage:
     conda run -n da3 python scripts/visionsim/produce_dataset.py \\
         --scene-script scripts/visionsim/scenes/tabletop_cliff.py \\
-        --blend-file data/sim_scenes/tabletop_cliff/scene.blend \\
+        --blend-file data/sim_dataset/tabletop_cliff/scene/scene.blend \\
         --output-dir data/sim_dataset/tabletop_cliff/
 """
 
@@ -79,6 +83,7 @@ def render_with_visionsim(blend_path, output_dir, device="cuda"):
         "--render-config.max-samples", "64",
         "--render-config.device-type", device,
         "--render-config.use-denoising",
+        "--render-config.no-allow-skips",
         "--render-config.log-dir", log_dir,
     ]
     logger.info(f"Rendering with VisionSIM: {' '.join(cmd)}")
@@ -154,27 +159,14 @@ def encode_rgb_mp4(output_dir, fps=25, crf=18):
     logger.info(f"  rgb.mp4 = {size_mb:.2f} MB")
 
 
-def copy_meta_sidecar(blend_path, output_dir):
-    """Copy <blend>.meta.json into the dataset dir as scene_meta.json."""
-    meta_src = os.path.splitext(blend_path)[0] + ".meta.json"
-    meta_dst = os.path.join(output_dir, "scene_meta.json")
-    if not os.path.exists(meta_src):
-        logger.warning(
-            f"No meta sidecar at {meta_src}. The scene script should call write_meta_sidecar(); "
-            "evaluate.py will skip cliff metrics without scene metadata."
-        )
-        return
-    shutil.copyfile(meta_src, meta_dst)
-    logger.info(f"Copied {meta_src} -> {meta_dst}")
-
-
 def main():
     parser = argparse.ArgumentParser(description="Produce a VisionSIM dataset for DA3 cliff-detection eval")
     parser.add_argument("--scene-script", default="scripts/visionsim/scenes/tabletop_cliff.py",
                         help="Blender scene-builder script (uses bpy)")
-    parser.add_argument("--blend-file", default="data/sim_scenes/tabletop_cliff/scene.blend",
+    parser.add_argument("--blend-file", default="data/sim_dataset/tabletop_cliff/scene/scene.blend",
                         help="Path to .blend file (created if missing). Sidecar meta is read from "
-                             "<dirname>/scene.meta.json next to it.")
+                             "<dirname>/scene.meta.json next to it. Conventionally lives at "
+                             "<output-dir>/scene/scene.blend so each scene is self-contained.")
     parser.add_argument("--output-dir", default="data/sim_dataset/tabletop_cliff/",
                         help="Dataset output directory. Logs land in outputs/logs/produce_<scene>/.")
     parser.add_argument("--device", default="cuda", choices=["cuda", "cpu", "optix"],
@@ -192,7 +184,6 @@ def main():
         build_blend(args.scene_script, args.blend_file)
     render_with_visionsim(args.blend_file, args.output_dir, device=args.device)
     pack_depth_gt_npz(args.output_dir)
-    copy_meta_sidecar(args.blend_file, args.output_dir)
 
     if args.rgb_format in ("mp4", "both"):
         encode_rgb_mp4(args.output_dir, crf=args.mp4_crf)
